@@ -1,0 +1,112 @@
+---
+title: "Europe Growth"
+author: "Sahil Ali"
+date: "2025-12-07"
+output: html_document
+---
+
+This R markdown file will show the code for Europs GDP growth
+
+```{r}
+
+countries <- read.csv("data sets/continents-according-to-our-world-in-data.csv",
+                                  stringsAsFactors = F)
+
+GDP_per_capita <- read.csv("data sets/gdp-per-capita-worldbank.csv",
+                       stringsAsFactors = F)
+```
+
+Filter European countries
+
+```{r}
+
+europe_countries <- countries %>%
+  filter(Continent == "Europe")
+```
+
+Join with GDP per capita data
+
+```{r}
+
+europe_gdp <- europe_countries %>%
+  left_join(GDP_per_capita, by = "Entity")
+```
+
+Removing and renaming certain columns, filtering out countries with no data
+
+```{r}
+
+europe_gdp <- europe_gdp %>%
+  select(-Year.x, -Code.x) %>%
+  rename(Country = Entity) %>%
+  rename(Year = Year.y) %>%
+  rename(Code = Code.y) %>%
+  rename(GDP_PC = GDP.per.capita..PPP..constant.2017.international...) %>%
+  filter(!is.na(GDP_PC))
+
+```
+
+Calculating the GDP per capita growth rate for every year 
+
+```{r}
+
+europe_gdp <- europe_gdp %>%
+  arrange(Country, Year) %>%  # Make sure years are in order per country
+  group_by(Country) %>%       # Calculate within each country
+  mutate(growth_rate = (GDP_PC - lag(GDP_PC)) / lag(GDP_PC) * 100) %>%
+  ungroup()
+
+europe_avg_growth <- europe_gdp %>%
+  group_by(Year) %>%
+  summarise(avg_growth_rate = mean(growth_rate, na.rm = TRUE),
+    .groups = "drop")
+
+europe_gdp <- europe_gdp %>%
+  group_by(Year) %>%
+  mutate(europe_avg_growth = mean(growth_rate, na.rm = TRUE)) %>%
+  ungroup()
+```
+
+Now to plot the graphs
+
+```{r}
+
+library(ggplot2)
+
+# Define the 2 countries least developed countries
+selected_countries <- c("Moldova","Belarus")
+
+# Filter dataset
+plot_data <- europe_gdp %>%
+  filter(Country %in% selected_countries)
+
+# Plot
+ggplot(plot_data, aes(x = Year, y = growth_rate, color = Country)) + 
+  geom_line(size = 0.7) +
+  geom_point(size = 1.7) +
+geom_line(data = europe_avg_growth,
+            aes(x = Year, y = avg_growth_rate, color = "European average"),
+            size = 0.7) +
+geom_hline(yintercept = 7, linetype = "dashed", 
+           color = "black", size = 0.6) +
+  scale_color_manual(values = c(
+      "European average" = "#9A32CD",
+      "Moldova" = "#4F81BD",
+      "Belarus" = "#E3120B") ) +
+  labs(
+    title = "GDP per Capita Growth Rate of Selected European Countries",
+    x = "Year",
+    y = "Growth Rate (%)",
+    color = "Country") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 12, face = "bold"),
+    axis.title = element_text(size = 10),
+    legend.title = element_text(size = 14)) +
+  annotate("text", x = 1990, y = 7.5,
+    label = "7% Target", size = 3, color = "black", hjust = 0.2) 
+  
+
+ggsave("Europe Growth Plot.png", width = 10, height = 6, dpi = 300)
+```
+

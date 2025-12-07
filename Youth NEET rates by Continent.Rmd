@@ -1,0 +1,86 @@
+---
+title: "Youth NEET rates by Continent"
+author: "Sahil Ali"
+date: "2025-12-07"
+output: html_document
+---
+
+This R markdown file will show the code for Youth NEET rates by continent
+
+```{r}
+countries <- read.csv("data sets/continents-according-to-our-world-in-data.csv",
+                      stringsAsFactors = F)
+youth_unemployment <- read.csv("data sets/youth-not-in-education-employment-training.csv",
+                               stringsAsFactors = F)
+```
+
+Calculating the mean youth unemployment rate by Continent
+Join with youth unemployment data 
+
+```{r}
+
+library(dplyr)
+
+youth_unemployment2 <- countries %>%
+  left_join(youth_unemployment, by = "Entity")
+```
+
+Removing and renaming certain columns, filtering out countries with no data
+
+```{r}
+
+youth_unemployment2 <- youth_unemployment2 %>%
+  select(-Year.x, -Code.x) %>%
+  rename(Country = Entity) %>%
+  rename(Year = Year.y) %>%
+  rename(Code = Code.y) %>%
+  rename(y_unemployment = Share.of.youth.not.in.education..employment.or.training..total....of.youth.population.) %>%
+  filter(!is.na(y_unemployment))
+```
+
+Calculate the change in youth unemployment every year
+
+```{r}
+
+youth_unemployment_change <- youth_unemployment2 %>%
+  filter(Year >= 2015) %>%
+  arrange(Country, Year) %>%              # Make sure order is correct
+  group_by(Country) %>%                   # Calculate within each country
+  mutate(pct_change = ((y_unemployment - lag(y_unemployment)) / lag(y_unemployment)) * 100) %>%
+  ungroup()
+```
+
+Calculate the average youth unemployment change each year per continent
+
+```{r}
+
+continent_avg <- youth_unemployment_change %>%
+  group_by(Continent, Year) %>%
+  summarise(avg_pct_change = mean(pct_change, na.rm = TRUE), .groups = "drop")
+```
+
+Now to plot the graph
+
+```{r}
+
+library(ggplot2)
+
+ggplot(continent_avg, aes(x = Year, y = avg_pct_change)) +
+  geom_line(size = 1, colour = "steelblue") +
+  geom_point(size = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  facet_wrap(~Continent) +
+  labs(
+    title = "Average % Change in Youth NEET rates by Continent (from 2015)",
+    x = "Year",
+    y = "Average % Change") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 12, face = "bold"),
+    axis.title = element_text(size = 10),
+    legend.title = element_text(size = 14))
+
+ggsave("Youth NEET Rates Change Plot.png", width = 10, height = 6, dpi = 300)
+```
+
+

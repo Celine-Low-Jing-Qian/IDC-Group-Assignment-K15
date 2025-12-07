@@ -1,0 +1,74 @@
+---
+title: "Youth NEET Rates pre vs post Covid"
+author: "Sahil Ali"
+date: "2025-12-07"
+output: html_document
+---
+
+This R markdown file will show the code for Youth NEET rates pre & post covid
+
+```{r}
+countries <- read.csv("data sets/continents-according-to-our-world-in-data.csv",
+                      stringsAsFactors = F)
+youth_unemployment <- read.csv("data sets/youth-not-in-education-employment-training.csv",
+                               stringsAsFactors = F)
+```
+
+Joining data sets
+
+```{r}
+library(dplyr)
+
+youth_unemployment2 <- countries %>%
+  left_join(youth_unemployment, by = "Entity")
+```
+
+Removing and renaming certain columns, filtering out countries with no data
+
+```{r}
+youth_unemployment2 <- youth_unemployment2 %>%
+  select(-Year.x, -Code.x) %>%
+  rename(Country = Entity) %>%
+  rename(Year = Year.y) %>%
+  rename(Code = Code.y) %>%
+  rename(y_unemployment = Share.of.youth.not.in.education..employment.or.training..total....of.youth.population.) %>%
+  filter(!is.na(y_unemployment))
+```
+
+Calculating the average youth unemployment rate before and after 2020
+
+```{r}
+
+youth_summary <- youth_unemployment2 %>%
+  mutate(period = factor(
+    ifelse(Year < 2020, "Before 2020", "After 2020"),
+    levels = c("Before 2020", "After 2020"))) %>%
+  group_by(Continent, period) %>%
+  summarise(avg_youth_unemployment = mean(y_unemployment, na.rm = TRUE),
+    .groups = "drop")
+```
+
+Coding the graphs
+
+```{r}
+library(ggplot2)
+
+ggplot(youth_summary, aes(x = Continent, y = avg_youth_unemployment,
+           fill = period)) +
+  geom_col(position = "dodge") +
+  scale_fill_manual(values = c("Before 2020" = "#1f77b4",
+                               "After 2020"  = "#FF6A6A")) +
+  labs(
+    title = "Youth NEET Rate Pre Covid Vs Post Covid",
+    x = "Continent",
+    y = "Average youth NEET rate (%)",
+    fill = "Period") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(hjust = 0.5, size = 18, face = "bold"),
+        axis.title = element_text(size = 15),
+        legend.title = element_text(size = 14))
+
+ggsave("Youth NEET Bar Chart.png", width = 10, height = 6, dpi = 300)
+```
+

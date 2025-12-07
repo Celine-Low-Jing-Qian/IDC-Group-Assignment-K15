@@ -1,0 +1,81 @@
+---
+title: "Median Growth by continent"
+author: "Sahil Ali"
+date: "2025-12-07"
+output: html_document
+---
+
+This R markdown file will show the code for median growth by continent
+
+```{r}
+countries <- read.csv("data sets/continents-according-to-our-world-in-data.csv",
+                      stringsAsFactors = F)
+
+GDP_per_capita <- read.csv("data sets/gdp-per-capita-worldbank.csv",
+                           stringsAsFactors = F)
+```
+
+Joining the data sets
+
+```{r}
+
+library(dplyr)
+ 
+all_gdp <- countries %>%
+  left_join(GDP_per_capita, by = "Entity")
+```
+
+Removing and renaming certain columns, filtering out countries with no data
+
+```{r}
+all_gdp <- all_gdp %>%
+  select(-Year.x, -Code.x) %>%
+  rename(Country = Entity) %>%
+  rename(Year = Year.y) %>%
+  rename(Code = Code.y) %>%
+  rename(GDP_PC = GDP.per.capita..PPP..constant.2017.international...) %>%
+  filter(!is.na(GDP_PC)) %>%
+  filter(Year >= 2014)
+```
+
+Calculating the GDP per capita growth rate for every year 
+
+```{r}
+all_gdp <- all_gdp %>%
+  arrange(Country, Year) %>%  # Make sure years are in order per country
+  group_by(Country) %>%       # Calculate within each country
+  mutate(growth_rate = (GDP_PC - lag(GDP_PC)) / lag(GDP_PC) * 100) %>%
+  ungroup()
+
+continent_year_growth <- all_gdp %>%
+  group_by(Continent, Year) %>%
+  summarise(median_growth_rate = median(growth_rate, na.rm = TRUE),
+    .groups = "drop") %>%
+  filter(!is.na(median_growth_rate))
+```
+
+Now to plot the graphs
+
+```{r}
+
+library(ggplot2)
+
+ggplot(continent_year_growth, aes(x = Year, y = median_growth_rate, 
+                                  color = Continent)) + 
+  geom_line(size = 0.7) +
+  geom_point(size = 1.7) +
+  labs(
+    title = "Median Growth in GDP per Capita for Each Continent",
+    x = "Year",
+    y = "Growth Rate (%)",
+    color = "Continent") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 18, face = "bold"),
+    axis.title = element_text(size = 15),
+    legend.title = element_text(size = 14)) 
+
+ggsave("Continent Median Growth Plot.png", width = 10, height = 6, dpi = 300)
+```
+
+

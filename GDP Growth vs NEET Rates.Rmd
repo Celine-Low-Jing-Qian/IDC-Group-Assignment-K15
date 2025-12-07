@@ -1,0 +1,124 @@
+---
+title: "GDP growth vs NEET code"
+author: "Sahil Ali"
+date: "2025-12-07"
+output: html_document
+---
+This R markdown file will show the code for GDP growth vs NEET rates
+
+```{r}
+countries <- read.csv("data sets/continents-according-to-our-world-in-data.csv",
+                      stringsAsFactors = F)
+youth_unemployment <- read.csv("data sets/youth-not-in-education-employment-training.csv",
+                               stringsAsFactors = F)
+GDP_per_capita <- read.csv("data sets/gdp-per-capita-worldbank.csv",
+                           stringsAsFactors = F)
+```
+
+Calculating the mean GDP per Capita growth rate by Continent
+Then joining with GDP per capita data 
+
+```{r}
+library(dplyr)
+ 
+all_gdp <- countries %>%
+  left_join(GDP_per_capita, by = "Entity")
+```
+
+Removing and renaming certain columns, filtering out countries with no data
+
+```{r}
+all_gdp <- all_gdp %>%
+  select(-Year.x, -Code.x) %>%
+  rename(Country = Entity) %>%
+  rename(Year = Year.y) %>%
+  rename(Code = Code.y) %>%
+  rename(GDP_PC = GDP.per.capita..PPP..constant.2017.international...) %>%
+  filter(!is.na(GDP_PC)) 
+```
+
+Calculating the GDP per capita growth rate for every year 
+
+```{r}
+all_gdp <- all_gdp %>%
+  arrange(Country, Year) %>%  # Make sure years are in order per country
+  group_by(Country) %>%       # Calculate within each country
+  mutate(growth_rate = (GDP_PC - lag(GDP_PC)) / lag(GDP_PC) * 100) %>%
+  ungroup()
+
+continent_year_growth <- all_gdp %>%
+  group_by(Continent, Year) %>%
+  summarise(mean_growth_rate = mean(growth_rate, na.rm = TRUE),
+            .groups = "drop") %>%
+  filter(!is.na(mean_growth_rate))
+```
+
+Join with youth unemployment data 
+
+```{r}
+youth_unemployment2 <- countries %>%
+  left_join(youth_unemployment, by = "Entity")
+```
+
+Removing and renaming certain columns, filtering out countries with no data
+
+```{r}
+youth_unemployment2 <- youth_unemployment2 %>%
+  select(-Year.x, -Code.x) %>%
+  rename(Country = Entity) %>%
+  rename(Year = Year.y) %>%
+  rename(Code = Code.y) %>%
+  rename(y_unemployment = Share.of.youth.not.in.education..employment.or.training..total....of.youth.population.) %>%
+  filter(!is.na(y_unemployment))
+```
+
+Calculating the mean youth unemployment rate by Continent
+
+```{r}
+youth_unemployment2 <- youth_unemployment2 %>%
+  arrange(Country, Year) %>%        # Make sure years are in order per country
+  group_by(Country) %>%             # Calculate within each country
+  mutate(growth_rate = (y_unemployment - lag(y_unemployment)) / lag(y_unemployment) * 100) %>%
+  ungroup()
+
+continent_year_unemployment <- youth_unemployment2 %>%
+  group_by(Continent, Year) %>%
+  summarise(mean_growth_rate = mean(growth_rate, na.rm = TRUE),
+            .groups = "drop") %>%
+  filter(!is.na(mean_growth_rate))
+```
+
+Creating one final data set
+
+```{r}
+final_data <- continent_year_growth %>%
+  rename(GDP_growth = mean_growth_rate) %>%
+  inner_join(continent_year_unemployment %>% 
+      rename(Youth_unemployment_change = mean_growth_rate),
+    by = c("Continent", "Year")) %>%
+  filter(Year >= 2005, GDP_growth>= -7.5, Youth_unemployment_change <=50)
+```
+
+Now plotting the graph
+
+```{r}
+
+library(ggplot2)
+
+ggplot(final_data, aes(x = GDP_growth, y = Youth_unemployment_change)) +
+  geom_point(aes(color = Continent), size = 3, alpha = 0.7) +  
+  geom_smooth(method = "lm", se = TRUE, color = "black") +     
+  labs(
+    title = "Relationship between GDP per Capita Growth and Youth NEET rates",
+    x = "GDP per Capita Growth (%)",
+    y = "Youth NEET rate Change (%)") +
+  theme_minimal() +
+  theme(
+      plot.title = element_text(hjust = 0.5, size = 18, face = "bold"),
+      axis.title = element_text(size = 15),
+      legend.title = element_text(size = 14),
+      legend.position = "bottom")
+
+ggsave("GDP growth vs youth NEET Plot.png", width = 10, height = 6, dpi = 300)
+```
+
