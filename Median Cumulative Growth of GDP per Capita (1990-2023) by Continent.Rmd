@@ -1,16 +1,16 @@
 ---
-title: "Cumulative Growth of GDP per Capita (1990-2023)"
+title: "Median Cumulative Growth of GDP per Capita (1990-2023) by Continent"
 author: "Justin Li"
 date: "2025-12-07"
 output: html_document
 ---
 
-This R Markdown file presents the code for analyzing the cumulative growth of GDP per capita across six continents and their least developed countries (LDCs) from 1990 to 2023.
+This R Markdown file analyzes the **median cumulative growth of GDP per capita** across six continents and their least developed countries (LDCs) from 1990 to 2023, and generates continent-specific line plots with UN growth target benchmarks.
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 
-# Install and load required packages
+# Safely install and load required packages
 required_packages <- c("tidyverse", "readr", "dplyr", "ggplot2", "purrr")
 new_packages <- required_packages[!(required_packages %in% installed.packages()[,"Package"])]
 if (length(new_packages) > 0) {
@@ -18,13 +18,13 @@ if (length(new_packages) > 0) {
 }
 lapply(required_packages, library, character.only = TRUE)
 
-# Define file paths (Mac Desktop)
+# Define file names and Mac Desktop paths
 gdp_file <- "gdp-per-capita-worldbank.csv"
 continent_file <- "continents-according-to-our-world-in-data.csv"
 gdp_df <- read_csv(file.path("~/Desktop", gdp_file), show_col_types = FALSE)
 continent_df <- read_csv(file.path("~/Desktop", continent_file), show_col_types = FALSE)
 
-# Merge data and rename column
+# Merge datasets, filter valid data, and rename key column
 merged_df <- gdp_df %>%
   left_join(continent_df %>% select(Entity, Continent), by = "Entity") %>%
   filter(
@@ -34,9 +34,10 @@ merged_df <- gdp_df %>%
   ) %>%
   rename(gdp_per_capita = `GDP per capita, PPP (constant 2017 international $)`)
 
+# List of six target continents
 continents_list <- c("Asia", "Africa", "Europe", "North America", "South America", "Oceania")
 
-# LDC lists by continent
+# Define 4 LDCs for each continent
 ldc_asia <- c("Afghanistan", "Bangladesh", "Nepal", "Myanmar")
 ldc_africa <- c("Ethiopia", "Rwanda", "Mozambique", "Malawi")
 ldc_europe <- c("Moldova", "Bosnia and Herzegovina", "Serbia", "Albania")
@@ -44,6 +45,7 @@ ldc_north_america <- c("Haiti", "Guatemala", "Honduras", "Nicaragua")
 ldc_south_america <- c("Bolivia", "Paraguay", "Ecuador", "Guyana")
 ldc_oceania <- c("Solomon Islands", "Vanuatu", "Fiji", "Papua New Guinea")
 
+# Create continent-to-LDC mapping list
 ldc_by_continent <- list(
   Asia = ldc_asia,
   Africa = ldc_africa,
@@ -67,30 +69,40 @@ growth_df <- merged_df %>%
   ungroup() %>%
   filter(Continent %in% continents_list)
 
+# Iterate over each continent to generate plots
 purrr::walk(continents_list, function(continent) {
+  # Filter data for the current continent
   continent_data <- growth_df %>% filter(Continent == continent)
   ldc_countries <- ldc_by_continent[[continent]]
   ldc_data <- continent_data %>% filter(Entity %in% ldc_countries)
   
-  continent_avg_growth <- continent_data %>%
+  # Calculate median cumulative growth for the continent (core metric)
+  continent_median_growth <- continent_data %>%
     group_by(Year) %>%
-    summarise(avg_cumulative_growth = mean(cumulative_growth, na.rm = TRUE), .groups = "drop")
+    summarise(median_cumulative_growth = median(cumulative_growth, na.rm = TRUE), .groups = "drop")
   
+  # Create the line plot
   p <- ggplot() +
-    geom_area(data = continent_avg_growth, aes(x = Year, y = avg_cumulative_growth), 
-              fill = "steelblue", alpha = 0.6) +
-    geom_line(data = continent_avg_growth, aes(x = Year, y = avg_cumulative_growth), 
-              color = "darkblue", linewidth = 1.2) +
-    geom_line(data = ldc_data, aes(x = Year, y = cumulative_growth, color = Entity), 
-              linewidth = 1, alpha = 0.8) +
-    geom_hline(yintercept = 487, linetype = "dashed", color = "red", linewidth = 1, alpha = 0.8) +
-    annotate("text", x = max(continent_avg_growth$Year), y = 500,
+    # Continent median growth line (bold dark blue)
+    geom_line(data = continent_median_growth,
+              aes(x = Year, y = median_cumulative_growth),
+              color = "darkblue", linewidth = 1.5, alpha = 0.9) +
+    # LDC individual growth lines (colored thin lines for comparison)
+    geom_line(data = ldc_data,
+              aes(x = Year, y = cumulative_growth, color = Entity),
+              linewidth = 1, alpha = 0.7) +
+    # UN 7% annual growth target line (dashed red)
+    geom_hline(yintercept = 487, linetype = "dashed", color = "red", linewidth = 1.2, alpha = 0.8) +
+    # Annotation for UN target
+    annotate("text", x = max(continent_median_growth$Year), y = 500,
              label = "UN Target: 7% Annual Growth (Cumulative 387%)",
              color = "red", hjust = 1, size = 3) +
+    # Plot labels and theme settings
     labs(
-      title = paste("Cumulative Growth of GDP per Capita (", continent, ", 1990-2023)", sep = ""),
-      subtitle = paste("Continent Average + 4 Least Developed Countries |", unique(continent_data$base_year_label)),
-      x = "Year", y = "Cumulative Growth Index (Base Year = 100)",
+      title = paste("Median Cumulative Growth of GDP per Capita (", continent, ", 1990-2023)", sep = ""),
+      subtitle = paste("Continent Median + 4 Least Developed Countries |", unique(continent_data$base_year_label)),
+      x = "Year",
+      y = "Cumulative Growth Index (Base Year = 100)",
       color = "LDC Country"
     ) +
     theme_minimal() +
@@ -102,18 +114,17 @@ purrr::walk(continents_list, function(continent) {
       plot.background = element_rect(fill = "white", color = NA)
     )
   
-  filename <- gsub(" ", "_", paste("GDP_Growth_", continent, ".png", sep = ""))
+  # Save plot to Mac Desktop (filename includes "Median" for distinction)
+  filename <- gsub(" ", "_", paste("GDP_Median_Growth_", continent, ".png", sep = ""))
   ggsave(
     file.path("~/Desktop", filename),
     p, width = 10, height = 7, dpi = 300, bg = "white"
   )
-  
-  cat(paste("ok ", continent, " saved (filename: ", filename, ")\n", sep = ""))
 })
 
 growth_df %>%
   filter(Year == max(Year)) %>%
   group_by(Continent) %>%
-  summarise(avg_cumulative_growth = mean(cumulative_growth, na.rm = TRUE), .groups = "drop") %>%
-  arrange(desc(avg_cumulative_growth)) %>%
+  summarise(median_cumulative_growth = median(cumulative_growth, na.rm = TRUE), .groups = "drop") %>%
+  arrange(desc(median_cumulative_growth)) %>%
   print()

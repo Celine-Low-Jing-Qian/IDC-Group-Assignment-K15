@@ -1,0 +1,102 @@
+---
+  title: "Absolute Change in Youth NEET Rate (2015-2020) by Continent"
+author: "Justin Li"
+date: "2025-12-07"
+output: html_document
+---
+  
+  This R Markdown file calculates the absolute change in youth NEET (Not in Education, Employment, or Training) rates across six continents between 2015 and 2020, and visualizes the results using a bar chart.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+# Install and load required packages
+if (!require(countrycode)) install.packages("countrycode")
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(countrycode)
+library(tidyr)
+
+# Load NEET dataset
+df_neet <- read_csv("~/Desktop/youth-not-in-education-employment-training.csv", show_col_types = FALSE)
+colnames(df_neet)[4] <- "NEET_rate"
+
+# Custom continent mapping for specific countries
+custom_continent <- c(
+  "United States" = "North America", "Canada" = "North America", "Mexico" = "North America",
+  "Australia" = "Oceania", "New Zealand" = "Oceania",
+  "Brazil" = "South America", "Argentina" = "South America",
+  "China" = "Asia", "India" = "Asia",
+  "Germany" = "Europe", "France" = "Europe",
+  "Nigeria" = "Africa", "South Africa" = "Africa",
+  "Kosovo" = "Europe", "Micronesia (country)" = "Oceania"
+)
+
+# Data cleaning and continent assignment
+df_neet_clean <- df_neet %>%
+  filter(!grepl("\\(WB\\)|EU|Central Asia|Latin America", Entity)) %>%
+  mutate(
+    Continent = suppressWarnings(countrycode(Entity, origin = "country.name", destination = "continent")),
+    Continent = case_when(
+      Entity %in% names(custom_continent) ~ custom_continent[Entity],
+      TRUE ~ Continent
+    )
+  )
+
+# Define target continents
+target_continents <- c("Asia", "Europe", "Africa", "North America", "South America", "Oceania")
+
+# Calculate yearly average NEET rates and absolute change
+continent_change <- df_neet_clean %>%
+  filter(
+    Continent %in% target_continents,
+    Year %in% c(2015, 2020),
+    !is.na(NEET_rate)
+  ) %>%
+  group_by(Continent, Year) %>%
+  summarise(NEET_rate = mean(NEET_rate, na.rm = TRUE), .groups = "drop") %>%
+  # Reshape data to wide format (2015 and 2020 as columns)
+  pivot_wider(names_from = Year, values_from = NEET_rate, names_prefix = "NEET_") %>%
+  # Calculate absolute change in percentage points
+  mutate(Absolute_Change = abs(NEET_2020 - NEET_2015)) %>%
+  # Ensure all six continents are included (fill 0 for missing data)
+  complete(Continent = target_continents, fill = list(Absolute_Change = 0))
+
+# Create bar chart
+p <- ggplot(continent_change, aes(x = Continent, y = Absolute_Change)) +
+  geom_col(
+    fill = "#2E86AB", 
+    width = 0.6,
+    alpha = 0.8,
+    color = "black"
+  ) +
+  # Add value labels on top of bars
+  geom_text(
+    aes(label = round(Absolute_Change, 2)),
+    vjust = -0.3,
+    size = 4,
+    fontface = "bold"
+  ) +
+  labs(
+    title = "Absolute Change in Youth NEET Rate (2015-2020)",
+    subtitle = "By Continent (Unit: Percentage Points)",
+    x = "Continent",
+    y = "Absolute Change (Percentage Points)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    axis.text.x = element_text(angle = 15, hjust = 1, size = 10),
+    axis.title = element_text(size = 12)
+  )
+
+# Save plot to desktop
+ggsave(
+  "~/Desktop/NEET_Absolute_Change_Bar_Chart.png",
+  plot = p,
+  width = 10,
+  height = 7,
+  dpi = 300
+)

@@ -1,29 +1,97 @@
 ---
 title: "NEET Trends (2015-2020) - Six Continents"
-output: html_document
+author: "Justin Li"
 date: "2025-12-07"
+output: html_document
 ---
+
+This R Markdown file presents the code for analyzing youth NEET (Not in Education, Employment, or Training) rate trends across six continents from 2015 to 2020.
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-```
+# Install and load required packages
+if (!require(countrycode)) install.packages("countrycode")
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(countrycode)
 
-## R Markdown
+# Read dataset (Confirm the file path matches your local location)
+df_neet <- read_csv("~/Desktop/youth-not-in-education-employment-training.csv", show_col_types = FALSE)
+# Rename the core column for clarity
+colnames(df_neet)[4] <- "NEET_rate"
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+# Custom continent mapping for specific countries
+custom_continent <- c(
+  "United States" = "North America", "Canada" = "North America", "Mexico" = "North America",
+  "Costa Rica" = "North America", "Guatemala" = "North America", "Panama" = "North America",
+  "Australia" = "Oceania", "New Zealand" = "Oceania", "Fiji" = "Oceania",
+  "Brazil" = "South America", "Argentina" = "South America", "Chile" = "South America",
+  "China" = "Asia", "India" = "Asia", "Germany" = "Europe", "France" = "Europe",
+  "Nigeria" = "Africa", "South Africa" = "Africa",
+  "Kosovo" = "Europe", "Micronesia (country)" = "Oceania"
+)
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+# Data cleaning and continent assignment
+df_neet_clean <- df_neet %>%
+  filter(!grepl("\\(WB\\)|EU|Central Asia|Latin America", Entity)) %>%
+  mutate(
+    Continent = suppressWarnings(
+      countrycode(Entity, origin = "country.name", destination = "continent")
+    ),
+    Continent = case_when(
+      Entity %in% names(custom_continent) ~ custom_continent[Entity],
+      TRUE ~ Continent
+    )
+  )
 
-```{r cars}
-summary(cars)
-```
+# Filter target continents and time period, calculate yearly average NEET rate
+target_continents <- c("Asia", "Europe", "Africa", "North America", "South America", "Oceania")
+continent_yearly <- df_neet_clean %>%
+  filter(
+    Continent %in% target_continents,
+    Year >= 2015 & Year <= 2020,
+    !is.na(NEET_rate)
+  ) %>%
+  group_by(Continent, Year) %>%
+  summarise(NEET_rate = mean(NEET_rate, na.rm = TRUE), .groups = "drop")
 
-## Including Plots
+# Print unique continents to verify data processing
+print(unique(continent_yearly$Continent))
 
-You can also embed plots, for example:
+# Create NEET trend plot
+p <- ggplot(continent_yearly, aes(x = Year, y = NEET_rate, color = Continent, group = Continent)) +
+  geom_line(linewidth = 1.5) +
+  geom_point(size = 3, alpha = 0.8) +
+  scale_x_continuous(breaks = 2015:2020, limits = c(2015, 2020)) +
+  scale_color_manual(values = c(
+    "Asia" = "#E63946", "Europe" = "#1D3557", 
+    "Africa" = "#F77F00", "North America" = "#0077B6", 
+    "South America" = "#2A9D8F", "Oceania" = "#9C27B0"
+  )) +
+  labs(
+    title = "NEET Trends (2015-2020) - Six Continents",
+    subtitle = "Youth NEET Rate by Continent",
+    x = "Year",
+    y = "NEET Rate (%)",
+    color = "Continent"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    legend.position = "bottom",
+    legend.key.size = unit(1.2, "cm")
+  )
 
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
+# Display the plot
+print(p)
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+# Save the plot to desktop
+ggsave(
+  "~/Desktop/NEET_Six_Continents_Final_Perfect.png",
+  plot = p,
+  width = 14,
+  height = 8,
+  dpi = 300
+)
