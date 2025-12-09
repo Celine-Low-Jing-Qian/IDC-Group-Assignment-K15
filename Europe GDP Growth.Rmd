@@ -88,7 +88,7 @@ geom_line(data = europe_avg_growth,
             aes(x = Year, y = avg_growth_rate, color = "European average"),
             size = 0.7) +
 geom_hline(yintercept = 7, linetype = "dashed", 
-           color = "black", size = 0.6) +
+           color = "navy", size = 0.6) +
   scale_color_manual(values = c(
       "European average" = "#9A32CD",
       "Moldova" = "#4F81BD",
@@ -104,9 +104,10 @@ geom_hline(yintercept = 7, linetype = "dashed",
     axis.title = element_text(size = 10),
     legend.title = element_text(size = 14)) +
   annotate("text", x = 1990, y = 7.5,
-    label = "7% Target", size = 3, color = "black", hjust = 0.2) 
+    label = "7% Target", size = 3, color = "navy", hjust = 0.2) 
   
 
 ggsave("Europe Growth Plot.png", width = 10, height = 6, dpi = 300)
 ```
+
 
